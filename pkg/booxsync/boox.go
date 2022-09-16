@@ -66,6 +66,10 @@ type createFolderRequestJson struct {
 }
 
 func (library *BooxLibrary) Stat(name string) (*BooxFile, error) {
+	if name == "." {
+		return &BooxFile{Name: name, IsDir: true}, nil
+	}
+
 	tokens := strings.Split(filepath.Clean(name), string(filepath.Separator))
 
 	currentPath := library.Root
@@ -81,7 +85,7 @@ func (library *BooxLibrary) Stat(name string) (*BooxFile, error) {
 		}
 
 		if !matched {
-			return nil, fmt.Errorf("stat: %q: %w", tokens[i], fs.ErrNotExist)
+			return nil, fmt.Errorf("boox stat: %q in %q: %w", tokens[i], name, fs.ErrNotExist)
 		}
 	}
 

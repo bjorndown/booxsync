@@ -37,6 +37,8 @@ func TestBooxLibrary_Exists(t *testing.T) {
 		{"test/test2/", true},
 		{"test/test2/nope.pdf", false},
 		{"test/nope/", false},
+		{"test2", false},
+		{".", true},
 	}
 
 	for _, c := range cases {
