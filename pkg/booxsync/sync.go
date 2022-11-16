@@ -84,7 +84,7 @@ func Sync(config SyncConfig) ([]string, error) {
 				if err != nil {
 					return fmt.Errorf("sync: creating folder %q: %w", path, err)
 				}
-			} else if !d.IsDir() {
+			} else {
 				err = boox.Upload(path, parent)
 				if err != nil {
 					return fmt.Errorf("sync: uploading %q: %w", path, err)
