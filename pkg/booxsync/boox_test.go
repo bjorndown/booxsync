@@ -89,12 +89,9 @@ func TestBooxLibrary_GetParentId(t *testing.T) {
 func TestBooxLibrary_CreateFolderDryRun(t *testing.T) {
 	l := buildLibrary()
 
-	l.PrintFileTree(2)
-
 	err := l.CreateFolder("foo", l.Root)
 
 	assert.NoError(t, err)
-	l.PrintFileTree(2)
 
 	stat, err := l.Stat("foo")
 
