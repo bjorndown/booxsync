@@ -1,2 +1,3 @@
 config.json
-cmd/booxsync/booxsync
+bin/
+.idea/
