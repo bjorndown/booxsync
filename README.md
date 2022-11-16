@@ -6,8 +6,7 @@ Sync a local folder to a Boox Note Air 2 library via its BooxDrop HTTP API
 
 ```sh
 # clone repo
-cd cmd/booxsync
-go build -ldflags "-s -w" .
+make bin
 cat << EOF > config.json
 {
   "host": "http://192.168.1.40:8085",
@@ -17,5 +16,5 @@ cat << EOF > config.json
   ]
 }
 EOF
-./booxsync -dryRun # 
+./bin/booxsync -dryRun
 ```
