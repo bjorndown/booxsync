@@ -2,10 +2,12 @@ package booxsync
 
 import (
 	"fmt"
+	"github.com/stretchr/testify/assert"
 	"testing"
 )
 
 func buildLibrary() *BooxLibrary {
+
 	file := BooxFile{Name: "test3.pdf"}
 
 	test2 := BooxFile{Name: "test2", IsDir: true, Id: "2",
@@ -15,10 +17,16 @@ func buildLibrary() *BooxLibrary {
 		Children: []*BooxFile{&test2}}
 
 	root := BooxFile{
+		Name:     "bla",
 		Children: []*BooxFile{&test},
 		IsDir:    true,
 	}
-	l := BooxLibrary{Root: &root}
+	l := BooxLibrary{Root: &root, Config: &SyncConfig{
+		Host:        "",
+		SyncRoot:    "/bla/",
+		PathsToSkip: nil,
+		DryRun:      true,
+	}}
 
 	file.Parent = &test2
 	test2.Parent = &test
@@ -38,6 +46,7 @@ func TestBooxLibrary_Exists(t *testing.T) {
 		{"test/test2/nope.pdf", false},
 		{"test/nope/", false},
 		{"test2", false},
+		{"test/foo.pdf", false},
 		{".", true},
 	}
 
@@ -75,4 +84,20 @@ func TestBooxLibrary_GetParentId(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestBooxLibrary_CreateFolderDryRun(t *testing.T) {
+	l := buildLibrary()
+
+	l.PrintFileTree(2)
+
+	err := l.CreateFolder("foo", l.Root)
+
+	assert.NoError(t, err)
+	l.PrintFileTree(2)
+
+	stat, err := l.Stat("foo")
+
+	assert.NoError(t, err)
+	assert.True(t, stat.IsDir)
 }

@@ -67,7 +67,7 @@ type createFolderRequestJson struct {
 
 func (library *BooxLibrary) Stat(name string) (*BooxFile, error) {
 	if name == "." {
-		return &BooxFile{Name: name, IsDir: true}, nil
+		return library.Root, nil
 	}
 
 	tokens := strings.Split(filepath.Clean(name), string(filepath.Separator))
@@ -107,7 +107,7 @@ func (library *BooxLibrary) GetParentId(name string) (string, error) {
 
 func (library *BooxLibrary) CreateFolder(name string, parent *BooxFile) error {
 	if library.Config.DryRun {
-		log.Printf("pretending to create folder %q", name)
+		log.Printf("pretending to create folder %q", path.Join(parent.Name, name))
 		parent.Children = append(parent.Children, &BooxFile{Name: name, Id: "dryRun", IsDir: true})
 		return nil
 	}
@@ -197,6 +197,22 @@ func (library *BooxLibrary) Upload(localPath string, parent *BooxFile) error {
 	}
 
 	return nil
+}
+
+func (library *BooxLibrary) PrintFileTree(stopAt int) {
+	printSubTree(library.Root, 0, stopAt)
+	log.Println()
+}
+
+func printSubTree(file *BooxFile, level int, stopAt int) {
+	if level == stopAt {
+		return
+	}
+
+	for _, child := range file.Children {
+		log.Println(strings.Repeat("\t", level), child.Name)
+		printSubTree(child, level+1, stopAt)
+	}
 }
 
 func walk(visibleLibrary visibleLibraryJson, config *SyncConfig) (*BooxFile, error) {
