@@ -7,7 +7,7 @@ darwin-bin:
 windows-bin:
 	GOOS=windows go build -ldflags "-s -w" -o bin/booxsync-windows-amd64.exe cmd/booxsync/main.go
 run:
-	go run cmd/booxsync/main.go
+	go run cmd/booxsync/main.go -debug
 clean:
 	rm -rf bin
 test:

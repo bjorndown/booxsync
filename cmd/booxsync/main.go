@@ -1,28 +1,33 @@
 package main
 
 import (
-	"fmt"
-	"log"
-
 	"github.com/bjorm/booxsync/pkg/booxsync"
+	log "github.com/sirupsen/logrus"
+	"strings"
 )
 
 func main() {
 	config, err := booxsync.GetConfig()
 
 	if err != nil {
-		panic(fmt.Sprintf("invalid config: %s", err))
+		log.Infof("invalid config: %s", err)
+		return
 	}
 
-	log.Printf("syncing %s to %s", config.SyncRoot, config.Host)
+	log.Infof("syncing %s to %s", config.SyncRoot, config.Host)
 
-	uploadedFiles, err := booxsync.Sync(*config)
+	uploadedFiles, err := booxsync.Sync(config)
 
 	if err != nil {
-		panic(fmt.Sprintf("sync failed: %s", err))
+		log.Infof("sync failed: %s", err)
+		return
 	}
 
-	log.Printf("uploaded files: %s", uploadedFiles)
+	if len(uploadedFiles) > 0 {
+		log.Infof("uploaded files:\n%s", strings.Join(uploadedFiles, "\n"))
+	} else {
+		log.Infoln("nothing uploaded")
+	}
 
-	log.Println("sync complete")
+	log.Infoln("sync complete")
 }

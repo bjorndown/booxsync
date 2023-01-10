@@ -4,9 +4,9 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	log "github.com/sirupsen/logrus"
 	"io"
 	"io/fs"
-	"log"
 	"mime/multipart"
 	"net/http"
 	"net/url"
@@ -17,7 +17,7 @@ import (
 )
 
 const (
-	API_PATH = "/api/library"
+	ApiPath = "/api/library"
 )
 
 type BooxFile struct {
@@ -38,6 +38,10 @@ type libraryJson struct {
 	LibraryCount       int                  `json:"libraryCount"`
 	VisibleLibraryList []visibleLibraryJson `json:"visibleLibraryList"`
 	VisibleBookList    []visibleBookJson    `json:"visibleBookList"`
+}
+
+type libraryApiArgs struct {
+	LibraryUniqueId string `json:"libraryUniqueId"`
 }
 
 type visibleLibraryJson struct {
@@ -107,7 +111,7 @@ func (library *BooxLibrary) GetParentId(name string) (string, error) {
 
 func (library *BooxLibrary) CreateFolder(name string, parent *BooxFile) error {
 	if library.Config.DryRun {
-		log.Printf("pretending to create folder %q", path.Join(parent.Name, name))
+		log.Debugf("pretending to create folder %q", path.Join(parent.Name, name))
 		parent.Children = append(parent.Children, &BooxFile{Name: name, Id: "dryRun", IsDir: true})
 		return nil
 	}
@@ -123,7 +127,7 @@ func (library *BooxLibrary) CreateFolder(name string, parent *BooxFile) error {
 		return fmt.Errorf("createFolder: marshal failed: %w", err)
 	}
 
-	response, err := http.Post(fmt.Sprintf("%s%s", library.Config.Host, API_PATH), "application/json", bytes.NewReader(body))
+	response, err := http.Post(library.Config.syncUrl.JoinPath(ApiPath).String(), "application/json", bytes.NewReader(body))
 
 	if err != nil || response.StatusCode != 200 {
 		return fmt.Errorf("createFolder: API call failed: %w", err)
@@ -150,7 +154,7 @@ func (library *BooxLibrary) CreateFolder(name string, parent *BooxFile) error {
 
 func (library *BooxLibrary) Upload(localPath string, parent *BooxFile) error {
 	if library.Config.DryRun {
-		log.Printf("pretending to upload file %q", localPath)
+		log.Debugf("pretending to upload file %q", localPath)
 		return nil
 	}
 
@@ -190,7 +194,7 @@ func (library *BooxLibrary) Upload(localPath string, parent *BooxFile) error {
 		return fmt.Errorf("upload: closing form writer failed: %w", err)
 	}
 
-	response, err := http.Post(fmt.Sprintf("%s/api/library/upload", library.Config.Host), formWriter.FormDataContentType(), body)
+	response, err := http.Post(library.Config.syncUrl.JoinPath("/api/library/upload").String(), formWriter.FormDataContentType(), body)
 
 	if err != nil || response.StatusCode != 200 {
 		return fmt.Errorf("upload: http request failed: %w", err)
@@ -199,28 +203,20 @@ func (library *BooxLibrary) Upload(localPath string, parent *BooxFile) error {
 	return nil
 }
 
-func (library *BooxLibrary) PrintFileTree(stopAt int) {
-	printSubTree(library.Root, 0, stopAt)
-	log.Println()
-}
-
-func printSubTree(file *BooxFile, level int, stopAt int) {
-	if level == stopAt {
-		return
-	}
-
-	for _, child := range file.Children {
-		log.Println(strings.Repeat("\t", level), child.Name)
-		printSubTree(child, level+1, stopAt)
-	}
+func buildWalkUrl(visibleLibrary visibleLibraryJson, config *SyncConfig) *url.URL {
+	query := url.Values{}
+	args := libraryApiArgs{LibraryUniqueId: visibleLibrary.IdString}
+	argsBytes, _ := json.Marshal(args)
+	query.Add("args", string(argsBytes))
+	requestUrl := config.syncUrl.JoinPath(ApiPath)
+	requestUrl.RawQuery = query.Encode()
+	return requestUrl
 }
 
 func walk(visibleLibrary visibleLibraryJson, config *SyncConfig) (*BooxFile, error) {
-	query := url.Values{}
-	// TODO fixme
-	query.Add("args", fmt.Sprintf("{\"libraryUniqueId\":\"%s\"}", visibleLibrary.IdString))
-
-	response, err := http.Get(fmt.Sprintf("%s%s?%s", config.Host, API_PATH, query.Encode()))
+	requestUrl := buildWalkUrl(visibleLibrary, config)
+	log.Debugf("reading library %q at %s", visibleLibrary.Name, requestUrl)
+	response, err := http.Get(requestUrl.String())
 
 	if err != nil {
 		return nil, fmt.Errorf("walk: http request failed: %w", err)
@@ -255,29 +251,38 @@ func walk(visibleLibrary visibleLibraryJson, config *SyncConfig) (*BooxFile, err
 		folder.Children = append(folder.Children, child)
 	}
 
+	if log.IsLevelEnabled(log.DebugLevel) {
+		var children []string
+		for _, child := range folder.Children {
+			children = append(children, child.Name)
+		}
+		log.Debugf("library %q contains\n%s", folder.Name, strings.Join(children, "', '"))
+	}
+
 	return &folder, nil
 }
 
 func GetBooxLibrary(config *SyncConfig) (*BooxLibrary, error) {
-	response, err := http.Get(fmt.Sprintf("%s%s", config.Host, API_PATH))
+	requestUrl := config.syncUrl.JoinPath(ApiPath).String()
+	response, err := http.Get(requestUrl)
 	if err != nil {
-		return nil, fmt.Errorf("getBooxLibrary: API call failed: %w", err)
+		return nil, fmt.Errorf("read library: API call failed: %w", err)
 	}
 
 	var rootLibrary visibleLibraryJson
 	body, err := io.ReadAll(response.Body)
 	if err != nil {
-		return nil, fmt.Errorf("getBooxLibrary: failed to read body: %w", err)
+		return nil, fmt.Errorf("read library: failed to read body: %w", err)
 	}
 
 	err = json.Unmarshal(body, &rootLibrary)
 	if err != nil {
-		return nil, fmt.Errorf("getBooxLibrary: unmarshalling failed: %w", err)
+		return nil, fmt.Errorf("read library: unmarshalling failed: %w", err)
 	}
 
 	root, err := walk(rootLibrary, config)
 	if err != nil {
-		return nil, fmt.Errorf("getBooxLibrary: walking library failed: %w", err)
+		return nil, fmt.Errorf("read library: walking library failed: %w", err)
 	}
 
 	return &BooxLibrary{Root: root, Config: config}, nil
